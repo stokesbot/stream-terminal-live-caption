@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Captions — Stream Terminal Setup</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; min-height: 100%;
+    background: #000;
+    color: #fff;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
+  }
+  #app {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 4vh 5vw;
+  }
+  h1 {
+    font-size: 2.5rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.02em;
+  }
+  .subtitle {
+    font-size: 1rem;
+    opacity: 0.5;
+    margin-bottom: 3rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .section {
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 12px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+  }
+  .section h2 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .status-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: #ff3333;
+    display: inline-block;
+    transition: background 0.3s;
+  }
+  .status-dot.ok { background: #00ff66; box-shadow: 0 0 8px #00ff66; }
+  .status-dot.warn { background: #ffaa00; box-shadow: 0 0 8px #ffaa00; }
+
+  .device-list {
+    list-style: none;
+  }
+  .device-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.2rem;
+    border: 1px solid #222;
+    border-radius: 8px;
+    margin-bottom: 0.6rem;
+    background: #0a0a0a;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .device-item:hover {
+    border-color: #333;
+    background: #141414;
+  }
+  .device-item.selected {
+    border-color: #00ff66;
+    background: #0a1a0a;
+  }
+  .device-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+  .device-name {
+    font-size: 1rem;
+    font-weight: 500;
+  }
+  .device-meta {
+    font-size: 0.8rem;
+    opacity: 0.4;
+  }
+  .btn {
+    padding: 0.5rem 1rem;
+    border: 1px solid #333;
+    border-radius: 6px;
+    background: #1a1a1a;
+    color: #fff;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .btn:hover {
+    background: #2a2a2a;
+    border-color: #444;
+  }
+  .btn.select-btn.selected {
+    background: #0a3a1a;
+    border-color: #00ff66;
+    color: #00ff66;
+  }
+  .btn.primary {
+    background: #fff;
+    color: #000;
+    border-color: #fff;
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+  }
+  .btn.primary:hover {
+    background: #eee;
+  }
+
+  .actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+    flex-wrap: wrap;
+  }
+  .hint {
+    font-size: 0.85rem;
+    opacity: 0.4;
+    margin-top: 0.8rem;
+  }
+  .error-banner {
+    background: #2a0a0a;
+    border: 1px solid #ff3333;
+    color: #ff6666;
+    padding: 1rem 1.2rem;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    display: none;
+  }
+  .error-banner.visible { display: block; }
+
+  #refresh-spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid #333;
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .footer {
+    margin-top: 4rem;
+    padding-top: 2rem;
+    border-top: 1px solid #222;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  .watermark {
+    font-size: 0.8rem;
+    opacity: 0.25;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <h1>⚙️ Stream Terminal Setup</h1>
+  <div class="subtitle">Audio Input Configuration</div>
+
+  <div class="error-banner" id="error-banner"></div>
+
+  <div class="section">
+    <h2>
+      <span class="status-dot" id="audio-status"></span>
+      Audio Input Devices
+      <span id="refresh-spinner" style="display:none;"></span>
+    </h2>
+    <ul class="device-list" id="device-list">
+      <li class="device-item">
+        <div class="device-info">
+          <span class="device-name">Loading devices…</span>
+        </div>
+      </li>
+    </ul>
+    <p class="hint">Select the audio device connected to your mixer line-out. Changes require an app restart to take effect.</p>
+    <div class="actions">
+      <button class="btn" onclick="refreshDevices()">🔄 Refresh List</button>
+      <button class="btn" onclick="clearSelection()">Clear Selection</button>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔗 Quick Links</h2>
+    <p style="opacity:0.7; margin-bottom:1rem;">Open the caption display page in your browser and go fullscreen:</p>
+    <div class="actions">
+      <a href="/" class="btn primary">Open Caption Display →</a>
+      <a href="/health" class="btn">Health Check (JSON)</a>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>ℹ️ Status</h2>
+    <div id="system-status" style="opacity:0.7; line-height:1.6;">
+      Loading…
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="watermark">STREAM TERMINAL · LIVE CAPTIONS</div>
+    <div style="opacity:0.4; font-size:0.8rem;">
+      MOCK_MODE: <strong id="mock-indicator">OFF</strong>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const deviceList = document.getElementById('device-list');
+  const errorBanner = document.getElementById('error-banner');
+  const audioStatus = document.getElementById('audio-status');
+  const spinner = document.getElementById('refresh-spinner');
+  const sysStatus = document.getElementById('system-status');
+  const mockIndicator = document.getElementById('mock-indicator');
+
+  function showError(msg) {
+    errorBanner.textContent = msg;
+    errorBanner.classList.add('visible');
+  }
+  function hideError() {
+    errorBanner.classList.remove('visible');
+  }
+
+  async function fetchHealth() {
+    try {
+      const res = await fetch('/health');
+      const data = await res.json();
+      sysStatus.innerHTML = `
+        <strong>Azure Region:</strong> ${data.region || 'westeurope'}<br>
+        <strong>Source Language:</strong> ${data.source}<br>
+        <strong>Target Language:</strong> ${data.target}<br>
+        <strong>Server Status:</strong> ${data.status}
+      `;
+      if (data.mock) {
+        mockIndicator.textContent = 'ON';
+        mockIndicator.style.color = '#ffaa00';
+      } else {
+        mockIndicator.textContent = 'OFF';
+        mockIndicator.style.color = '#00ff66';
+      }
+    } catch (e) {
+      sysStatus.textContent = 'Server not responding. Is the app running?';
+      sysStatus.style.color = '#ff6666';
+    }
+  }
+
+  async function refreshDevices() {
+    spinner.style.display = 'inline-block';
+    hideError();
+    try {
+      const res = await fetch('/api/audio-devices');
+      const data = await res.json();
+      spinner.style.display = 'none';
+
+      if (!data.available) {
+        deviceList.innerHTML = `
+          <li class="device-item">
+            <div class="device-info">
+              <span class="device-name" style="color:#ff6666;">No audio subsystem available</span>
+              <span class="device-meta">${data.error || 'sounddevice library not installed'}</span>
+            </div>
+          </li>`;
+        audioStatus.className = 'status-dot error';
+        return;
+      }
+
+      if (data.devices.length === 0) {
+        deviceList.innerHTML = `
+          <li class="device-item">
+            <div class="device-info">
+              <span class="device-name" style="color:#ffaa00;">No input devices detected</span>
+              <span class="device-meta">Connect a USB audio interface or microphone and click Refresh</span>
+            </div>
+          </li>`;
+        audioStatus.className = 'status-dot warn';
+        return;
+      }
+
+      audioStatus.className = 'status-dot ok';
+      deviceList.innerHTML = data.devices.map(d => `
+        <li class="device-item ${d.selected ? 'selected' : ''}">
+          <div class="device-info">
+            <span class="device-name">${escapeHtml(d.name)}</span>
+            <span class="device-meta">${d.channels} ch · ${Math.round(d.sample_rate)} Hz · Index ${d.index}</span>
+          </div>
+          <button class="btn select-btn ${d.selected ? 'selected' : ''}" onclick="selectDevice('${escapeHtml(d.name).replace(/'/g, "\\'")}')">
+            ${d.selected ? '✓ Selected' : 'Select'}
+          </button>
+        </li>
+      `).join('');
+    } catch (e) {
+      spinner.style.display = 'none';
+      showError('Failed to fetch devices: ' + e.message);
+    }
+  }
+
+  async function selectDevice(name) {
+    hideError();
+    try {
+      const res = await fetch('/api/select-device', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      const data = await res.json();
+      if (data.success) {
+        refreshDevices();
+        showError('✓ Selected: ' + name + '. Restart the app to activate this device.');
+        errorBanner.style.background = '#0a2a0a';
+        errorBanner.style.borderColor = '#00ff66';
+        errorBanner.style.color = '#00ff66';
+      } else {
+        showError('Error: ' + (data.error || 'Unknown'));
+      }
+    } catch (e) {
+      showError('Failed to select device: ' + e.message);
+    }
+  }
+
+  async function clearSelection() {
+    hideError();
+    try {
+      const res = await fetch('/api/clear-device', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        refreshDevices();
+        showError('✓ Cleared selection. Will use default microphone after restart.');
+        errorBanner.style.background = '#0a2a0a';
+        errorBanner.style.borderColor = '#00ff66';
+        errorBanner.style.color = '#00ff66';
+      }
+    } catch (e) {
+      showError('Failed to clear selection: ' + e.message);
+    }
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // Expose to global for inline onclick handlers
+  window.selectDevice = selectDevice;
+  window.refreshDevices = refreshDevices;
+  window.clearSelection = clearSelection;
+
+  // Init
+  refreshDevices();
+  fetchHealth();
+})();
+</script>
+
+</body>
+</html>
