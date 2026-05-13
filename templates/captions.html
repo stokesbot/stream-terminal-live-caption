@@ -727,7 +727,11 @@
     const cues = buildCueObjects(remaining, 'interim');
     if (!cues.length) return;
 
-    state.interimCue = cues[cues.length - 1];
+    // For long unfinished speech, show the *next* phrase after the promoted
+    // history prefix, not the last chunk of the tail. Showing the last chunk
+    // makes the live cue appear to jump ahead and hides the immediate
+    // continuation the audience expects to read next.
+    state.interimCue = cues[0];
     state.lastInterimText = remaining;
     state.lastInterimRenderedAt = Date.now();
     render();
