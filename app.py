@@ -197,6 +197,7 @@ def run_mock_translation():
         "We are now opening the floor for discussion",
         "This technology supports many languages",
         "Stream Terminal makes it possible",
+        "What you are seeing on screen should continue updating even when the speaker gives a long sentence because stable parts of the transcript can now be promoted before the thought is fully finished",
     ]
 
     idx = 0
