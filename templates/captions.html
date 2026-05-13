@@ -272,6 +272,8 @@
     interimCue: null,
     lastInterimRenderedAt: 0,
     lastCommittedText: '',
+    lastCommittedFullText: '',
+    lastCommittedCueText: '',
     lastInterimText: '',
     promotedInterimPrefix: '',
     stablePrefixCandidate: '',
@@ -552,15 +554,54 @@
     return bestIdx;
   }
 
+  function similarityTokens(text) {
+    return normalizeText(text)
+      .toLowerCase()
+      .replace(/[^a-z0-9\s']/g, ' ')
+      .split(/\s+/)
+      .filter(Boolean);
+  }
+
+  function isNearDuplicateCueText(nextText, previousText) {
+    const nextNormalized = normalizeText(nextText);
+    const prevNormalized = normalizeText(previousText);
+    if (!nextNormalized || !prevNormalized) return false;
+    if (nextNormalized === prevNormalized) return true;
+
+    const nextLower = nextNormalized.toLowerCase();
+    const prevLower = prevNormalized.toLowerCase();
+    if (nextLower.includes(prevLower) || prevLower.includes(nextLower)) {
+      const shorter = Math.min(nextLower.length, prevLower.length);
+      const longer = Math.max(nextLower.length, prevLower.length);
+      if (shorter >= 20 && (shorter / longer) >= 0.82) return true;
+    }
+
+    const nextTokens = similarityTokens(nextNormalized);
+    const prevTokens = similarityTokens(prevNormalized);
+    if (!nextTokens.length || !prevTokens.length) return false;
+
+    const nextSet = new Set(nextTokens);
+    const prevSet = new Set(prevTokens);
+    let shared = 0;
+    nextSet.forEach(token => {
+      if (prevSet.has(token)) shared += 1;
+    });
+
+    const overlap = shared / Math.max(nextSet.size, prevSet.size);
+    const coverage = shared / Math.min(nextSet.size, prevSet.size);
+    return shared >= 4 && overlap >= 0.72 && coverage >= 0.85;
+  }
+
   function appendCommittedDelta(text) {
     const normalized = normalizeText(text);
     if (!normalized) return;
 
-    const cues = buildCueObjects(normalized, 'committed');
+    const cues = buildCueObjects(normalized, 'committed').filter(cue => !isNearDuplicateCueText(cue.text, state.lastCommittedCueText));
     if (!cues.length) return;
 
     state.committedCues.push(...cues);
     state.committedCues = state.committedCues.slice(-SETTINGS.maxStoredCues);
+    state.lastCommittedCueText = cues[cues.length - 1].text;
     state.lastCommittedText = normalized;
   }
 
@@ -614,6 +655,15 @@
     const normalized = normalizeText(text);
     if (!normalized) return;
 
+    if (normalized === state.lastCommittedFullText) {
+      state.interimCue = null;
+      state.currentInterimFullText = '';
+      state.promotedInterimPrefix = '';
+      resetStablePrefixTracking();
+      render();
+      return;
+    }
+
     let delta = normalized;
     const promoted = normalizeText(state.promotedInterimPrefix);
     if (promoted && normalized.startsWith(promoted)) {
@@ -630,6 +680,7 @@
     }
 
     appendCommittedDelta(delta);
+    state.lastCommittedFullText = normalized;
     state.lastInterimText = '';
     state.currentInterimFullText = '';
     state.interimCue = null;
