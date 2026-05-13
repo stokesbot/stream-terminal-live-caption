@@ -6,120 +6,197 @@
 <title>Live Captions — Stream Terminal</title>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <style>
-  /* ─── Reset ─── */
   * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #000;
+    --fg: #fff;
+    --muted: #cfcfcf;
+    --soft: #9aa0a6;
+    --accent: #ffd84d;
+    --ok: #00ff66;
+    --warn: #ffaa00;
+    --error: #ff4d4d;
+  }
+
   html, body {
-    width: 100%; height: 100%;
-    background: #000;
-    color: #fff;
-    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    width: 100%;
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
     overflow: hidden;
     user-select: none;
   }
 
-  /* ─── Layout ─── */
-  #app {
+  body {
     display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    width: 100%; height: 100%;
-    padding: 2vh 3vw;
-    position: relative;
+    align-items: stretch;
+    justify-content: center;
   }
 
-  /* ─── Status Bar ─── */
+  #app {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    padding: 2.2vh 2.8vw;
+  }
+
   #status-bar {
     position: absolute;
-    top: 1.5vh; left: 3vw;
+    top: 2.2vh;
+    left: 2.8vw;
     display: flex;
     align-items: center;
-    gap: 1vw;
-    font-size: 1.2vw;
-    opacity: 0.6;
-    transition: opacity 0.3s;
+    gap: 0.8rem;
+    font-size: clamp(14px, 1vw, 22px);
+    opacity: 0.8;
     z-index: 10;
   }
-  #status-dot {
-    width: 0.8vw; height: 0.8vw;
-    border-radius: 50%;
-    background: #888;
-    transition: background 0.3s;
-  }
-  #status-dot.ok { background: #00ff66; box-shadow: 0 0 0.5vw #00ff66; }
-  #status-dot.warn { background: #ffaa00; box-shadow: 0 0 0.5vw #ffaa00; }
-  #status-dot.error { background: #ff3333; box-shadow: 0 0 0.5vw #ff3333; }
-  #status-text { font-weight: 500; letter-spacing: 0.02em; }
 
-  /* ─── Caption Area ─── */
+  #status-dot {
+    width: 0.9rem;
+    height: 0.9rem;
+    border-radius: 50%;
+    background: #666;
+    flex: 0 0 auto;
+  }
+
+  #status-dot.ok { background: var(--ok); box-shadow: 0 0 12px var(--ok); }
+  #status-dot.warn { background: var(--warn); box-shadow: 0 0 12px var(--warn); }
+  #status-dot.error { background: var(--error); box-shadow: 0 0 12px var(--error); }
+
+  #status-text {
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  #caption-shell {
+    position: absolute;
+    left: 50%;
+    bottom: 7vh;
+    transform: translateX(-50%);
+    width: min(88vw, 1500px);
+    padding: 2.2vh 2.2vw 2vh;
+    border-radius: 22px;
+    background: rgba(0, 0, 0, 0.68);
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 30px 80px rgba(0,0,0,0.45);
+    backdrop-filter: blur(8px);
+  }
+
   #caption-stage {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 1.5vh;
-    padding-bottom: 3vh;
+    display: grid;
+    gap: 1.2vh;
+    align-items: end;
   }
 
   .caption-line {
-    width: 100%;
     text-align: center;
-    line-height: 1.35;
+    line-height: 1.22;
+    letter-spacing: 0.01em;
+    text-wrap: balance;
+    min-height: 1.22em;
+    word-break: normal;
+    overflow-wrap: anywhere;
+    text-shadow: 0 3px 12px rgba(0,0,0,0.65);
+  }
+
+  .caption-line.history {
+    font-size: clamp(24px, 2.25vw, 42px);
+    color: var(--muted);
     font-weight: 600;
-    text-shadow: 0 0.15vw 0.4vw rgba(0,0,0,0.9);
-    transition: opacity 0.2s, transform 0.2s;
+    opacity: 0.95;
   }
 
-  /* Previous (committed) caption — slightly dimmed */
-  .caption-line.prev {
-    font-size: 2.8vw;
-    color: #ccc;
-    opacity: 0.7;
-    min-height: 3.8vw;
-  }
-
-  /* Current (live/interim) caption — bright, prominent */
   .caption-line.current {
-    font-size: 4.2vw;
-    color: #ffffff;
-    opacity: 1;
-    min-height: 5.7vw;
-  }
-  .caption-line.current.interim {
-    color: #ffeb3b; /* Yellow tint while still translating */
+    font-size: clamp(34px, 3.3vw, 64px);
+    color: var(--fg);
+    font-weight: 750;
   }
 
-  /* ─── Fullscreen Hint ─── */
-  #fullscreen-hint {
+  .caption-line.preview {
+    font-size: clamp(22px, 1.95vw, 34px);
+    color: var(--accent);
+    opacity: 0.92;
+    font-weight: 600;
+    min-height: 1.4em;
+  }
+
+  .caption-line.empty {
+    opacity: 0;
+  }
+
+  #caption-meta {
+    margin-top: 1.4vh;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    color: var(--soft);
+    font-size: clamp(13px, 0.9vw, 18px);
+    opacity: 0.78;
+  }
+
+  #mode-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.38rem 0.72rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+
+  #hint-bar {
     position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 2vw;
-    opacity: 0.4;
-    pointer-events: none;
-    display: none;
+    top: 2.2vh;
+    right: 2.8vw;
+    text-align: right;
+    color: var(--soft);
+    font-size: clamp(12px, 0.9vw, 18px);
+    opacity: 0.72;
   }
 
-  /* ─── Branding watermark ─── */
   #watermark {
     position: absolute;
-    bottom: 1.5vh; right: 3vw;
-    font-size: 1vw;
-    opacity: 0.25;
-    letter-spacing: 0.05em;
+    right: 2.8vw;
+    bottom: 2.2vh;
+    color: var(--soft);
+    font-size: clamp(12px, 0.85vw, 16px);
+    letter-spacing: 0.08em;
+    opacity: 0.35;
+  }
+
+  @media (max-width: 900px) {
+    #caption-shell {
+      width: 94vw;
+      bottom: 3vh;
+      padding: 2vh 3vw;
+    }
   }
 </style>
 </head>
 <body>
-
 <div id="app">
-  <div id="status-bar">
+  <div id="status-bar" aria-live="polite">
     <div id="status-dot"></div>
     <div id="status-text">Connecting…</div>
   </div>
 
-  <div id="caption-stage">
-    <div class="caption-line prev" id="prev-line">—</div>
-    <div class="caption-line current" id="curr-line">Waiting for audio…</div>
-  </div>
+  <div id="hint-bar">Click anywhere for fullscreen · Press <strong>F</strong> to toggle</div>
+
+  <main id="caption-shell" aria-live="polite" aria-atomic="false">
+    <div id="caption-stage">
+      <div class="caption-line history empty" id="line-1">&nbsp;</div>
+      <div class="caption-line current" id="line-2">Waiting for speech…</div>
+      <div class="caption-line preview empty" id="line-3">&nbsp;</div>
+    </div>
+    <div id="caption-meta">
+      <div id="mode-pill">Stable mode · phrase-based captions</div>
+      <div id="preview-label">Preview hidden until phrase is meaningful</div>
+    </div>
+  </main>
 
   <div id="watermark">STREAM TERMINAL · LIVE CAPTIONS</div>
 </div>
@@ -130,14 +207,36 @@
     dot: document.getElementById('status-dot'),
     text: document.getElementById('status-text')
   };
-  const PREV = document.getElementById('prev-line');
-  const CURR = document.getElementById('curr-line');
 
-  let lastFinal = '';
+  const UI = {
+    line1: document.getElementById('line-1'),
+    line2: document.getElementById('line-2'),
+    line3: document.getElementById('line-3'),
+    previewLabel: document.getElementById('preview-label')
+  };
+
+  const SETTINGS = {
+    maxCharsPerLine: 42,
+    previewMinChars: 18,
+    previewMinWords: 4,
+    previewDebounceMs: 320,
+    previewShowTrailingChars: 10,
+    previewSuppressIfNearFinalChars: 8,
+    maxCommittedLines: 2
+  };
+
+  const state = {
+    committedLines: [],
+    currentFinalText: '',
+    lastPreviewText: '',
+    lastPreviewRenderedAt: 0,
+    lastEventAt: 0
+  };
 
   function setStatus(msg, level) {
     STATUS.text.textContent = msg;
     STATUS.dot.className = '';
+    STATUS.dot.id = 'status-dot';
     if (level) STATUS.dot.classList.add(level);
   }
 
@@ -148,28 +247,163 @@
     else if (el.msRequestFullscreen) el.msRequestFullscreen();
   }
 
-  // Auto-fullscreen on first click (browsers require user gesture)
   document.addEventListener('click', () => {
     if (!document.fullscreenElement) goFullscreen();
   }, { once: true });
 
-  // Try auto-fullscreen on load (works in some kiosk/PWA contexts)
-  window.addEventListener('load', () => {
-    setTimeout(() => {
-      if (!document.fullscreenElement) goFullscreen();
-    }, 300);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'f' || e.key === 'F') {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else goFullscreen();
+    }
   });
 
-  // ─── Socket.IO ───
+  function normalizeText(text) {
+    return (text || '')
+      .replace(/\s+/g, ' ')
+      .replace(/\s+([,.;:!?])/g, '$1')
+      .trim();
+  }
+
+  function splitLongSegment(segment, maxChars) {
+    const parts = [];
+    let remaining = segment.trim();
+
+    while (remaining.length > maxChars) {
+      let slice = remaining.slice(0, maxChars + 1);
+      let breakIdx = Math.max(
+        slice.lastIndexOf(', '),
+        slice.lastIndexOf('; '),
+        slice.lastIndexOf(': '),
+        slice.lastIndexOf(' ')
+      );
+      if (breakIdx < Math.floor(maxChars * 0.55)) breakIdx = maxChars;
+      parts.push(remaining.slice(0, breakIdx).trim());
+      remaining = remaining.slice(breakIdx).trim();
+    }
+
+    if (remaining) parts.push(remaining);
+    return parts;
+  }
+
+  function chunkCaption(text, maxChars) {
+    const normalized = normalizeText(text);
+    if (!normalized) return [];
+
+    const phraseParts = normalized
+      .split(/(?<=[.!?;:])\s+/)
+      .flatMap(part => part.split(/(?<=,)\s+/))
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    const lines = [];
+    let current = '';
+
+    phraseParts.forEach(part => {
+      if (!current) {
+        current = part;
+        return;
+      }
+
+      const candidate = `${current} ${part}`.trim();
+      if (candidate.length <= maxChars) {
+        current = candidate;
+      } else {
+        if (current.length > maxChars) {
+          lines.push(...splitLongSegment(current, maxChars));
+        } else {
+          lines.push(current);
+        }
+        current = part;
+      }
+    });
+
+    if (current) {
+      if (current.length > maxChars) lines.push(...splitLongSegment(current, maxChars));
+      else lines.push(current);
+    }
+
+    return lines.filter(Boolean);
+  }
+
+  function setLine(el, text, emptyClass) {
+    const value = text && text.trim() ? text.trim() : '\u00A0';
+    el.textContent = value;
+    el.classList.toggle('empty', !text || !text.trim());
+    if (emptyClass) el.classList.toggle(emptyClass, false);
+  }
+
+  function render() {
+    const committed = state.committedLines.slice(-SETTINGS.maxCommittedLines);
+    const previous = committed.length === 2 ? committed[0] : '';
+    const current = committed.length >= 1 ? committed[committed.length - 1] : 'Waiting for speech…';
+    const preview = state.lastPreviewText;
+
+    setLine(UI.line1, previous);
+    setLine(UI.line2, current);
+    setLine(UI.line3, preview);
+
+    UI.previewLabel.textContent = preview
+      ? 'Live preview shown only after a stable phrase forms'
+      : 'Preview hidden until phrase is meaningful';
+  }
+
+  function appendCommittedText(text) {
+    const chunks = chunkCaption(text, SETTINGS.maxCharsPerLine);
+    if (!chunks.length) return;
+    state.committedLines.push(...chunks);
+    state.committedLines = state.committedLines.slice(-SETTINGS.maxCommittedLines);
+    state.currentFinalText = chunks[chunks.length - 1] || state.currentFinalText;
+    state.lastPreviewText = '';
+    render();
+  }
+
+  function shouldShowPreview(previewText) {
+    if (!previewText) return false;
+    if (previewText.length < SETTINGS.previewMinChars) return false;
+
+    const words = previewText.split(/\s+/).filter(Boolean);
+    if (words.length < SETTINGS.previewMinWords) return false;
+
+    const now = Date.now();
+    if ((now - state.lastPreviewRenderedAt) < SETTINGS.previewDebounceMs) return false;
+
+    if (state.currentFinalText) {
+      const currentNorm = normalizeText(state.currentFinalText);
+      const previewNorm = normalizeText(previewText);
+      if (previewNorm === currentNorm) return false;
+
+      if (previewNorm.startsWith(currentNorm)) {
+        const delta = previewNorm.slice(currentNorm.length).trim();
+        if (delta.length < SETTINGS.previewShowTrailingChars) return false;
+      }
+
+      if (currentNorm.startsWith(previewNorm) && (currentNorm.length - previewNorm.length) <= SETTINGS.previewSuppressIfNearFinalChars) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  function makePreview(interimText) {
+    const chunks = chunkCaption(interimText, SETTINGS.maxCharsPerLine);
+    if (!chunks.length) return '';
+    const candidate = chunks[chunks.length - 1];
+    if (!shouldShowPreview(candidate)) return '';
+    state.lastPreviewRenderedAt = Date.now();
+    return candidate;
+  }
+
   const socket = io({
-    transports: ['websocket', 'polling'],
+    transports: ['polling'],
     reconnection: true,
-    reconnectionDelay: 1000
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 3000
   });
 
   socket.on('connect', () => {
     setStatus('Connected', 'ok');
-    CURR.textContent = 'Listening for audio…';
   });
 
   socket.on('disconnect', () => {
@@ -180,36 +414,28 @@
     setStatus(data.message, data.level || 'ok');
   });
 
-  // Interim (partial) caption
   socket.on('caption_update', (data) => {
-    if (data.text) {
-      CURR.textContent = data.text;
-      CURR.classList.add('interim');
+    const text = normalizeText(data.text || '');
+    if (!text) return;
+
+    state.lastEventAt = Date.now();
+    const preview = makePreview(text);
+    if (preview && preview !== state.lastPreviewText) {
+      state.lastPreviewText = preview;
+      render();
     }
   });
 
-  // Final (committed) caption
   socket.on('caption_commit', (data) => {
-    if (data.text) {
-      CURR.classList.remove('interim');
-      // Roll current to previous, show new current
-      if (lastFinal && lastFinal !== data.text) {
-        PREV.textContent = lastFinal;
-      }
-      CURR.textContent = data.text;
-      lastFinal = data.text;
-    }
+    const text = normalizeText(data.text || '');
+    if (!text) return;
+
+    state.lastEventAt = Date.now();
+    appendCommittedText(text);
   });
 
-  // Keyboard shortcut: F = toggle fullscreen
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'f' || e.key === 'F') {
-      if (document.fullscreenElement) document.exitFullscreen();
-      else goFullscreen();
-    }
-  });
+  render();
 })();
 </script>
-
 </body>
 </html>
