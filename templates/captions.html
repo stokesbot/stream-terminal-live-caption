@@ -253,15 +253,15 @@
   };
 
   const SETTINGS = {
-    maxCharsPerLine: 36,
+    maxCharsPerLine: 40,
     maxCueLines: 2,
     maxVisibleLines: 8,
-    maxCueChars: 72,
+    maxCueChars: 84,
     interimMinChars: 16,
     interimMinWords: 3,
     interimDebounceMs: 350,
-    stablePrefixMinChars: 28,
-    stablePrefixProtectTailChars: 14,
+    stablePrefixMinChars: 36,
+    stablePrefixProtectTailChars: 18,
     stablePrefixConfirmations: 2,
     maxStoredCues: 16,
     smallWords: new Set(['a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'from', 'if', 'in', 'into', 'is', 'it', 'of', 'on', 'or', 'so', 'than', 'that', 'the', 'to', 'up', 'with'])
@@ -316,18 +316,26 @@
     const right = words.slice(breakIndex).join(' ');
     const leftLast = (words[breakIndex - 1] || '').toLowerCase().replace(/[^a-z']/g, '');
     const rightFirst = (words[breakIndex] || '').toLowerCase().replace(/[^a-z']/g, '');
+    const leftSecondLast = (words[breakIndex - 2] || '').toLowerCase().replace(/[^a-z']/g, '');
+    const rightSecond = (words[breakIndex + 1] || '').toLowerCase().replace(/[^a-z']/g, '');
 
     let score = 100;
     const diff = Math.abs(left.length - right.length);
-    score -= diff * 1.7;
+    score -= diff * 1.35;
 
-    if (left.length > SETTINGS.maxCharsPerLine || right.length > SETTINGS.maxCharsPerLine) score -= 60;
-    if (left.length < 10 || right.length < 10) score -= 20;
-    if (SETTINGS.smallWords.has(leftLast)) score -= 18;
-    if (SETTINGS.smallWords.has(rightFirst)) score -= 18;
-    if (/[,:;]$/.test(left)) score += 12;
-    if (/[.!?]$/.test(left)) score += 8;
-    if (/^(and|but|so|because|that|which|who|when|while|to|for|of)$/i.test(rightFirst)) score -= 10;
+    if (left.length > SETTINGS.maxCharsPerLine || right.length > SETTINGS.maxCharsPerLine) score -= 70;
+    if (left.length < 14 || right.length < 14) score -= 28;
+    if (left.length < 18 || right.length < 18) score -= 12;
+    if (SETTINGS.smallWords.has(leftLast)) score -= 26;
+    if (SETTINGS.smallWords.has(rightFirst)) score -= 22;
+    if (SETTINGS.smallWords.has(leftSecondLast) && SETTINGS.smallWords.has(leftLast)) score -= 12;
+    if (SETTINGS.smallWords.has(rightFirst) && SETTINGS.smallWords.has(rightSecond)) score -= 10;
+    if (/[,:;]$/.test(left)) score += 22;
+    if (/[.!?]$/.test(left)) score += 12;
+    if (/^(and|but|so|because|that|which|who|when|while)$/i.test(rightFirst)) score += 10;
+    if (/^(the|a|an|my|your|his|her|our|their)$/i.test(rightFirst)) score -= 24;
+    if (/^(to|of|for|in|on|at|with|from|by)$/i.test(rightFirst)) score -= 26;
+    if (/^(is|are|was|were|be|been|being|have|has|had|do|does|did|will|would|can|could|should|may|might)$/i.test(leftLast)) score -= 18;
 
     return score;
   }
@@ -507,24 +515,29 @@
     const safeText = normalized.slice(0, Math.max(0, normalized.length - SETTINGS.stablePrefixProtectTailChars)).trim();
     if (safeText.length < SETTINGS.stablePrefixMinChars) return -1;
 
-    const breakPatterns = [
-      /[.!?](?=\s|$)/g,
-      /[,;:](?=\s)/g,
-      /\s(?=(and|but|so|because|which|that|while|when|we|you|they|it)\b)/gi
-    ];
-
     let bestIdx = -1;
-    breakPatterns.forEach((pattern) => {
-      pattern.lastIndex = 0;
-      let match;
-      while ((match = pattern.exec(safeText)) !== null) {
-        const idx = match.index + match[0].length;
-        if (idx >= SETTINGS.stablePrefixMinChars) bestIdx = Math.max(bestIdx, idx);
+    let bestScore = -Infinity;
+    const words = safeText.split(' ').filter(Boolean);
+
+    if (words.length >= 4) {
+      for (let i = 1; i < words.length; i++) {
+        const left = words.slice(0, i).join(' ').trim();
+        const right = words.slice(i).join(' ').trim();
+        if (!left || !right) continue;
+        if (left.length < SETTINGS.stablePrefixMinChars) continue;
+        if (left.length > SETTINGS.maxCueChars) break;
+
+        const score = scoreBreak(words, i);
+        if (score > bestScore) {
+          bestScore = score;
+          bestIdx = left.length;
+        }
       }
-    });
+    }
+
+    if (bestScore < 55) bestIdx = -1;
 
     if (bestIdx === -1) {
-      const words = safeText.split(' ').filter(Boolean);
       if (words.length >= 8) {
         let running = '';
         for (let i = 0; i < words.length; i++) {
