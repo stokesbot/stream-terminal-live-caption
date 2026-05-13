@@ -528,6 +528,7 @@
         if (!left || !right) continue;
         if (left.length < SETTINGS.stablePrefixMinChars) continue;
         if (left.length > SETTINGS.maxCueChars) break;
+        if (!isStrongCommitBoundary(left, right)) continue;
 
         const score = scoreBreak(words, i);
         if (score > bestScore) {
@@ -546,7 +547,7 @@
           const candidate = `${running} ${words[i]}`.trim();
           if (candidate.length > SETTINGS.maxCueChars) break;
           running = candidate;
-          if (running.length >= SETTINGS.stablePrefixMinChars) bestIdx = running.length;
+          if (running.length >= SETTINGS.stablePrefixMinChars && isStrongCommitBoundary(running, safeText.slice(running.length))) bestIdx = running.length;
         }
       }
     }
@@ -560,6 +561,52 @@
       .replace(/[^a-z0-9\s']/g, ' ')
       .split(/\s+/)
       .filter(Boolean);
+  }
+
+  function isWeakBoundaryWord(word) {
+    return /^(and|but|so|or|because|that|which|who|when|while|if|than|to|of|for|in|on|at|with|from|by|the|a|an|it|this|these|those|however)$/i.test(word || '');
+  }
+
+  function isRepeatedFiller(tokens) {
+    if (tokens.length < 2 || tokens.length > 3) return false;
+    const normalized = tokens.map(token => token.toLowerCase());
+    return normalized.every(token => token === normalized[0]);
+  }
+
+  function isLowQualityCueText(text) {
+    const normalized = normalizeText(text);
+    if (!normalized) return true;
+
+    const tokens = similarityTokens(normalized);
+    if (!tokens.length) return true;
+    if (isRepeatedFiller(tokens)) return true;
+    if (tokens.length === 1 && normalized.length < 14 && !/[.!?]$/.test(normalized)) return true;
+    if (tokens.length <= 2 && normalized.length < 18) return true;
+
+    const lastWord = tokens[tokens.length - 1] || '';
+    const firstWord = tokens[0] || '';
+    if (isWeakBoundaryWord(lastWord) && !/[,:;.!?]$/.test(normalized)) return true;
+    if (tokens.length <= 3 && isWeakBoundaryWord(firstWord) && !/^[A-Z]/.test(normalized)) return true;
+
+    return false;
+  }
+
+  function isStrongCommitBoundary(leftText, rightText = '') {
+    const left = normalizeText(leftText);
+    const right = normalizeText(rightText);
+    if (!left || isLowQualityCueText(left)) return false;
+    if (/[.!?]$/.test(left)) return true;
+    if (/[,:;]$/.test(left) && right.length >= 10) return true;
+
+    const leftTokens = similarityTokens(left);
+    const rightTokens = similarityTokens(right);
+    const lastWord = leftTokens[leftTokens.length - 1] || '';
+    const rightFirst = rightTokens[0] || '';
+
+    if (isWeakBoundaryWord(lastWord)) return false;
+    if (right && right.length < 10) return false;
+    if (rightFirst && isWeakBoundaryWord(rightFirst) && rightTokens.length < 3) return false;
+    return left.length >= 28 && leftTokens.length >= 5;
   }
 
   function isNearDuplicateCueText(nextText, previousText) {
@@ -592,17 +639,74 @@
     return shared >= 4 && overlap >= 0.72 && coverage >= 0.85;
   }
 
+  function canMergeRefinementCue(nextText, previousText) {
+    const nextNormalized = normalizeText(nextText);
+    const prevNormalized = normalizeText(previousText);
+    if (!nextNormalized || !prevNormalized) return false;
+    if (nextNormalized === prevNormalized) return false;
+
+    const nextLower = nextNormalized.toLowerCase();
+    const prevLower = prevNormalized.toLowerCase();
+    const nextTokens = similarityTokens(nextNormalized);
+    const prevTokens = similarityTokens(prevNormalized);
+
+    if (nextLower.startsWith(prevLower) && nextNormalized.length > prevNormalized.length) {
+      const added = normalizeText(nextNormalized.slice(prevNormalized.length));
+      return !!added && !isLowQualityCueText(nextNormalized);
+    }
+
+    if (prevLower.startsWith(nextLower) && prevNormalized.length > nextNormalized.length) {
+      return false;
+    }
+
+    const sharedPrefixWords = [];
+    for (let i = 0; i < Math.min(nextTokens.length, prevTokens.length); i++) {
+      if (nextTokens[i] !== prevTokens[i]) break;
+      sharedPrefixWords.push(nextTokens[i]);
+    }
+
+    return sharedPrefixWords.length >= 4 && isNearDuplicateCueText(nextNormalized, prevNormalized);
+  }
+
+  function upsertCommittedCue(cue) {
+    if (!cue || !cue.text || isLowQualityCueText(cue.text)) return false;
+
+    const lastCue = state.committedCues[state.committedCues.length - 1];
+    if (lastCue) {
+      if (isNearDuplicateCueText(cue.text, lastCue.text)) {
+        if (canMergeRefinementCue(cue.text, lastCue.text)) {
+          state.committedCues[state.committedCues.length - 1] = cue;
+          state.lastCommittedCueText = cue.text;
+          return true;
+        }
+        return false;
+      }
+
+      if (canMergeRefinementCue(cue.text, lastCue.text)) {
+        state.committedCues[state.committedCues.length - 1] = cue;
+        state.lastCommittedCueText = cue.text;
+        return true;
+      }
+    }
+
+    state.committedCues.push(cue);
+    state.committedCues = state.committedCues.slice(-SETTINGS.maxStoredCues);
+    state.lastCommittedCueText = cue.text;
+    return true;
+  }
+
   function appendCommittedDelta(text) {
     const normalized = normalizeText(text);
     if (!normalized) return;
 
-    const cues = buildCueObjects(normalized, 'committed').filter(cue => !isNearDuplicateCueText(cue.text, state.lastCommittedCueText));
+    const cues = buildCueObjects(normalized, 'committed');
     if (!cues.length) return;
 
-    state.committedCues.push(...cues);
-    state.committedCues = state.committedCues.slice(-SETTINGS.maxStoredCues);
-    state.lastCommittedCueText = cues[cues.length - 1].text;
-    state.lastCommittedText = normalized;
+    let changed = false;
+    cues.forEach(cue => {
+      if (upsertCommittedCue(cue)) changed = true;
+    });
+    if (changed) state.lastCommittedText = normalized;
   }
 
   function promoteStablePrefix(fullInterimText) {
@@ -632,7 +736,13 @@
     }
 
     const candidate = normalizeText(remaining.slice(0, breakIdx));
+    const tail = normalizeText(remaining.slice(breakIdx));
     if (!candidate) {
+      resetStablePrefixTracking();
+      return false;
+    }
+
+    if (!isStrongCommitBoundary(candidate, tail)) {
       resetStablePrefixTracking();
       return false;
     }
