@@ -11,8 +11,8 @@
   :root {
     --bg: #000;
     --fg: #fff;
-    --muted: #cfcfcf;
-    --soft: #9aa0a6;
+    --muted: #d6d6d6;
+    --soft: #98a0aa;
     --accent: #ffd84d;
     --ok: #00ff66;
     --warn: #ffaa00;
@@ -50,7 +50,7 @@
     align-items: center;
     gap: 0.8rem;
     font-size: clamp(14px, 1vw, 22px);
-    opacity: 0.8;
+    opacity: 0.82;
     z-index: 10;
   }
 
@@ -71,60 +71,81 @@
     letter-spacing: 0.02em;
   }
 
+  #hint-bar {
+    position: absolute;
+    top: 2.2vh;
+    right: 2.8vw;
+    text-align: right;
+    color: var(--soft);
+    font-size: clamp(12px, 0.9vw, 18px);
+    opacity: 0.72;
+  }
+
   #caption-shell {
     position: absolute;
     left: 50%;
-    bottom: 7vh;
+    bottom: 5.5vh;
     transform: translateX(-50%);
-    width: min(88vw, 1500px);
-    padding: 2.2vh 2.2vw 2vh;
-    border-radius: 22px;
-    background: rgba(0, 0, 0, 0.68);
+    width: min(90vw, 1600px);
+    min-height: 33vh;
+    padding: 2.4vh 2.4vw 2.1vh;
+    border-radius: 24px;
+    background: rgba(0, 0, 0, 0.7);
     border: 1px solid rgba(255,255,255,0.08);
     box-shadow: 0 30px 80px rgba(0,0,0,0.45);
     backdrop-filter: blur(8px);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
   }
 
   #caption-stage {
-    display: grid;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
     gap: 1.2vh;
-    align-items: end;
+    min-height: 26vh;
   }
 
-  .caption-line {
+  .cue {
+    display: grid;
+    gap: 0.12em;
     text-align: center;
-    line-height: 1.22;
+    justify-items: center;
+  }
+
+  .cue-line {
+    max-width: 100%;
+    line-height: 1.16;
     letter-spacing: 0.01em;
-    text-wrap: balance;
-    min-height: 1.22em;
     word-break: normal;
     overflow-wrap: anywhere;
-    text-shadow: 0 3px 12px rgba(0,0,0,0.65);
+    text-shadow: 0 3px 12px rgba(0,0,0,0.68);
   }
 
-  .caption-line.history {
-    font-size: clamp(24px, 2.25vw, 42px);
+  .cue.history .cue-line {
+    font-size: clamp(24px, 2vw, 36px);
     color: var(--muted);
-    font-weight: 600;
+    font-weight: 620;
+    opacity: 0.9;
+  }
+
+  .cue.current .cue-line {
+    font-size: clamp(34px, 3.15vw, 60px);
+    color: var(--fg);
+    font-weight: 760;
+    opacity: 1;
+  }
+
+  .cue.live .cue-line {
+    font-size: clamp(28px, 2.45vw, 46px);
+    color: var(--accent);
+    font-weight: 680;
     opacity: 0.95;
   }
 
-  .caption-line.current {
-    font-size: clamp(34px, 3.3vw, 64px);
-    color: var(--fg);
-    font-weight: 750;
-  }
-
-  .caption-line.preview {
-    font-size: clamp(22px, 1.95vw, 34px);
-    color: var(--accent);
-    opacity: 0.92;
-    font-weight: 600;
-    min-height: 1.4em;
-  }
-
-  .caption-line.empty {
-    opacity: 0;
+  .cue-line.empty {
+    visibility: hidden;
   }
 
   #caption-meta {
@@ -135,7 +156,7 @@
     gap: 1rem;
     color: var(--soft);
     font-size: clamp(13px, 0.9vw, 18px);
-    opacity: 0.78;
+    opacity: 0.8;
   }
 
   #mode-pill {
@@ -146,16 +167,6 @@
     border-radius: 999px;
     background: rgba(255,255,255,0.06);
     border: 1px solid rgba(255,255,255,0.08);
-  }
-
-  #hint-bar {
-    position: absolute;
-    top: 2.2vh;
-    right: 2.8vw;
-    text-align: right;
-    color: var(--soft);
-    font-size: clamp(12px, 0.9vw, 18px);
-    opacity: 0.72;
   }
 
   #watermark {
@@ -172,7 +183,12 @@
     #caption-shell {
       width: 94vw;
       bottom: 3vh;
+      min-height: 38vh;
       padding: 2vh 3vw;
+    }
+
+    #caption-stage {
+      min-height: 29vh;
     }
   }
 </style>
@@ -187,14 +203,10 @@
   <div id="hint-bar">Click anywhere for fullscreen · Press <strong>F</strong> to toggle</div>
 
   <main id="caption-shell" aria-live="polite" aria-atomic="false">
-    <div id="caption-stage">
-      <div class="caption-line history empty" id="line-1">&nbsp;</div>
-      <div class="caption-line current" id="line-2">Waiting for speech…</div>
-      <div class="caption-line preview empty" id="line-3">&nbsp;</div>
-    </div>
+    <div id="caption-stage"></div>
     <div id="caption-meta">
-      <div id="mode-pill">Stable mode · phrase-based captions</div>
-      <div id="preview-label">Preview hidden until phrase is meaningful</div>
+      <div id="mode-pill">Broadcast mode · 2-line cues · up to 6 visible lines</div>
+      <div id="meta-detail">Stable subtitle stack</div>
     </div>
   </main>
 
@@ -209,28 +221,28 @@
   };
 
   const UI = {
-    line1: document.getElementById('line-1'),
-    line2: document.getElementById('line-2'),
-    line3: document.getElementById('line-3'),
-    previewLabel: document.getElementById('preview-label')
+    stage: document.getElementById('caption-stage'),
+    metaDetail: document.getElementById('meta-detail')
   };
 
   const SETTINGS = {
-    maxCharsPerLine: 42,
-    previewMinChars: 18,
-    previewMinWords: 4,
-    previewDebounceMs: 320,
-    previewShowTrailingChars: 10,
-    previewSuppressIfNearFinalChars: 8,
-    maxCommittedLines: 2
+    maxCharsPerLine: 36,
+    maxCueLines: 2,
+    maxVisibleLines: 6,
+    maxCueChars: 72,
+    interimMinChars: 16,
+    interimMinWords: 3,
+    interimDebounceMs: 350,
+    maxStoredCues: 12,
+    smallWords: new Set(['a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'from', 'if', 'in', 'into', 'is', 'it', 'of', 'on', 'or', 'so', 'than', 'that', 'the', 'to', 'up', 'with'])
   };
 
   const state = {
-    committedLines: [],
-    currentFinalText: '',
-    lastPreviewText: '',
-    lastPreviewRenderedAt: 0,
-    lastEventAt: 0
+    committedCues: [],
+    interimCue: null,
+    lastInterimRenderedAt: 0,
+    lastCommittedText: '',
+    lastInterimText: ''
   };
 
   function setStatus(msg, level) {
@@ -265,134 +277,226 @@
       .trim();
   }
 
-  function splitLongSegment(segment, maxChars) {
-    const parts = [];
-    let remaining = segment.trim();
+  function scoreBreak(words, breakIndex) {
+    const left = words.slice(0, breakIndex).join(' ');
+    const right = words.slice(breakIndex).join(' ');
+    const leftLast = (words[breakIndex - 1] || '').toLowerCase().replace(/[^a-z']/g, '');
+    const rightFirst = (words[breakIndex] || '').toLowerCase().replace(/[^a-z']/g, '');
+
+    let score = 100;
+    const diff = Math.abs(left.length - right.length);
+    score -= diff * 1.7;
+
+    if (left.length > SETTINGS.maxCharsPerLine || right.length > SETTINGS.maxCharsPerLine) score -= 60;
+    if (left.length < 10 || right.length < 10) score -= 20;
+    if (SETTINGS.smallWords.has(leftLast)) score -= 18;
+    if (SETTINGS.smallWords.has(rightFirst)) score -= 18;
+    if (/[,:;]$/.test(left)) score += 12;
+    if (/[.!?]$/.test(left)) score += 8;
+    if (/^(and|but|so|because|that|which|who|when|while|to|for|of)$/i.test(rightFirst)) score -= 10;
+
+    return score;
+  }
+
+  function wrapCueText(text) {
+    const normalized = normalizeText(text);
+    if (!normalized) return [];
+    if (normalized.length <= SETTINGS.maxCharsPerLine) return [normalized];
+
+    const words = normalized.split(' ');
+    if (words.length <= 1) return [normalized];
+
+    let bestIndex = -1;
+    let bestScore = -Infinity;
+
+    for (let i = 1; i < words.length; i++) {
+      const score = scoreBreak(words, i);
+      if (score > bestScore) {
+        bestScore = score;
+        bestIndex = i;
+      }
+    }
+
+    if (bestIndex === -1) return [normalized];
+
+    const line1 = words.slice(0, bestIndex).join(' ').trim();
+    const line2 = words.slice(bestIndex).join(' ').trim();
+
+    if (!line2) return [line1];
+    return [line1, line2];
+  }
+
+  function splitSegment(segment, maxChars) {
+    const pieces = [];
+    let remaining = normalizeText(segment);
 
     while (remaining.length > maxChars) {
-      let slice = remaining.slice(0, maxChars + 1);
+      const probe = remaining.slice(0, maxChars + 1);
       let breakIdx = Math.max(
-        slice.lastIndexOf(', '),
-        slice.lastIndexOf('; '),
-        slice.lastIndexOf(': '),
-        slice.lastIndexOf(' ')
+        probe.lastIndexOf('. '),
+        probe.lastIndexOf('? '),
+        probe.lastIndexOf('! '),
+        probe.lastIndexOf('; '),
+        probe.lastIndexOf(': '),
+        probe.lastIndexOf(', '),
+        probe.lastIndexOf(' ')
       );
-      if (breakIdx < Math.floor(maxChars * 0.55)) breakIdx = maxChars;
-      parts.push(remaining.slice(0, breakIdx).trim());
+
+      if (breakIdx < Math.floor(maxChars * 0.58)) breakIdx = maxChars;
+      pieces.push(remaining.slice(0, breakIdx).trim());
       remaining = remaining.slice(breakIdx).trim();
     }
 
-    if (remaining) parts.push(remaining);
-    return parts;
+    if (remaining) pieces.push(remaining);
+    return pieces.filter(Boolean);
   }
 
-  function chunkCaption(text, maxChars) {
+  function textToCueTexts(text) {
     const normalized = normalizeText(text);
     if (!normalized) return [];
 
-    const phraseParts = normalized
-      .split(/(?<=[.!?;:])\s+/)
-      .flatMap(part => part.split(/(?<=,)\s+/))
-      .map(s => s.trim())
+    const segments = normalized
+      .split(/(?<=[.!?])\s+/)
+      .flatMap(part => part.split(/(?<=[:;])\s+/))
+      .flatMap(part => part.split(/(?<=,)\s+(?=(and|but|so|because|which|that|we|you|they|it)\b)/i))
+      .map(part => normalizeText(part))
       .filter(Boolean);
 
-    const lines = [];
+    const cueTexts = [];
     let current = '';
 
-    phraseParts.forEach(part => {
+    segments.forEach(segment => {
       if (!current) {
-        current = part;
+        current = segment;
         return;
       }
 
-      const candidate = `${current} ${part}`.trim();
-      if (candidate.length <= maxChars) {
+      const candidate = `${current} ${segment}`.trim();
+      if (candidate.length <= SETTINGS.maxCueChars) {
         current = candidate;
       } else {
-        if (current.length > maxChars) {
-          lines.push(...splitLongSegment(current, maxChars));
-        } else {
-          lines.push(current);
-        }
-        current = part;
+        cueTexts.push(current);
+        current = segment;
       }
     });
 
-    if (current) {
-      if (current.length > maxChars) lines.push(...splitLongSegment(current, maxChars));
-      else lines.push(current);
-    }
+    if (current) cueTexts.push(current);
 
-    return lines.filter(Boolean);
+    return cueTexts.flatMap(cue => splitSegment(cue, SETTINGS.maxCueChars));
   }
 
-  function setLine(el, text, emptyClass) {
-    const value = text && text.trim() ? text.trim() : '\u00A0';
-    el.textContent = value;
-    el.classList.toggle('empty', !text || !text.trim());
-    if (emptyClass) el.classList.toggle(emptyClass, false);
+  function buildCueObjects(text, kind) {
+    return textToCueTexts(text).map(cueText => ({
+      kind,
+      text: cueText,
+      lines: wrapCueText(cueText).slice(0, SETTINGS.maxCueLines)
+    })).filter(cue => cue.lines.length);
+  }
+
+  function trimVisibleCues(cues) {
+    const picked = [];
+    let totalLines = 0;
+
+    for (let i = cues.length - 1; i >= 0; i--) {
+      const cue = cues[i];
+      const cueLines = Math.max(1, cue.lines.length);
+      if (picked.length && (totalLines + cueLines) > SETTINGS.maxVisibleLines) break;
+      if (!picked.length && cueLines > SETTINGS.maxVisibleLines) continue;
+      picked.unshift(cue);
+      totalLines += cueLines;
+      if (totalLines >= SETTINGS.maxVisibleLines) break;
+    }
+
+    return picked;
   }
 
   function render() {
-    const committed = state.committedLines.slice(-SETTINGS.maxCommittedLines);
-    const previous = committed.length === 2 ? committed[0] : '';
-    const current = committed.length >= 1 ? committed[committed.length - 1] : 'Waiting for speech…';
-    const preview = state.lastPreviewText;
+    UI.stage.innerHTML = '';
 
-    setLine(UI.line1, previous);
-    setLine(UI.line2, current);
-    setLine(UI.line3, preview);
+    const cueStack = [...state.committedCues];
+    if (state.interimCue) cueStack.push(state.interimCue);
 
-    UI.previewLabel.textContent = preview
-      ? 'Live preview shown only after a stable phrase forms'
-      : 'Preview hidden until phrase is meaningful';
+    const visible = trimVisibleCues(cueStack);
+
+    if (!visible.length) {
+      const cueEl = document.createElement('div');
+      cueEl.className = 'cue current';
+      const lineEl = document.createElement('div');
+      lineEl.className = 'cue-line';
+      lineEl.textContent = 'Waiting for speech…';
+      cueEl.appendChild(lineEl);
+      UI.stage.appendChild(cueEl);
+      UI.metaDetail.textContent = 'Stable subtitle stack';
+      return;
+    }
+
+    visible.forEach((cue, index) => {
+      const cueEl = document.createElement('div');
+      const isLast = index === visible.length - 1;
+      const className = cue.kind === 'interim'
+        ? 'cue live'
+        : (isLast ? 'cue current' : 'cue history');
+      cueEl.className = className;
+
+      cue.lines.forEach(line => {
+        const lineEl = document.createElement('div');
+        lineEl.className = 'cue-line';
+        lineEl.textContent = line || '\u00A0';
+        cueEl.appendChild(lineEl);
+      });
+
+      UI.stage.appendChild(cueEl);
+    });
+
+    UI.metaDetail.textContent = state.interimCue
+      ? 'Live line held until a stable commit arrives'
+      : 'Stable subtitle stack';
   }
 
-  function appendCommittedText(text) {
-    const chunks = chunkCaption(text, SETTINGS.maxCharsPerLine);
-    if (!chunks.length) return;
-    state.committedLines.push(...chunks);
-    state.committedLines = state.committedLines.slice(-SETTINGS.maxCommittedLines);
-    state.currentFinalText = chunks[chunks.length - 1] || state.currentFinalText;
-    state.lastPreviewText = '';
+  function addCommittedText(text) {
+    const normalized = normalizeText(text);
+    if (!normalized) return;
+    if (normalized === state.lastCommittedText) {
+      state.interimCue = null;
+      render();
+      return;
+    }
+
+    const cues = buildCueObjects(normalized, 'committed');
+    if (!cues.length) return;
+
+    state.committedCues.push(...cues);
+    state.committedCues = state.committedCues.slice(-SETTINGS.maxStoredCues);
+    state.lastCommittedText = normalized;
+    state.lastInterimText = '';
+    state.interimCue = null;
     render();
   }
 
-  function shouldShowPreview(previewText) {
-    if (!previewText) return false;
-    if (previewText.length < SETTINGS.previewMinChars) return false;
-
-    const words = previewText.split(/\s+/).filter(Boolean);
-    if (words.length < SETTINGS.previewMinWords) return false;
+  function shouldShowInterim(text) {
+    if (!text) return false;
+    if (text.length < SETTINGS.interimMinChars) return false;
+    if (text.split(/\s+/).filter(Boolean).length < SETTINGS.interimMinWords) return false;
+    if (text === state.lastCommittedText) return false;
 
     const now = Date.now();
-    if ((now - state.lastPreviewRenderedAt) < SETTINGS.previewDebounceMs) return false;
-
-    if (state.currentFinalText) {
-      const currentNorm = normalizeText(state.currentFinalText);
-      const previewNorm = normalizeText(previewText);
-      if (previewNorm === currentNorm) return false;
-
-      if (previewNorm.startsWith(currentNorm)) {
-        const delta = previewNorm.slice(currentNorm.length).trim();
-        if (delta.length < SETTINGS.previewShowTrailingChars) return false;
-      }
-
-      if (currentNorm.startsWith(previewNorm) && (currentNorm.length - previewNorm.length) <= SETTINGS.previewSuppressIfNearFinalChars) {
-        return false;
-      }
-    }
+    if ((now - state.lastInterimRenderedAt) < SETTINGS.interimDebounceMs) return false;
 
     return true;
   }
 
-  function makePreview(interimText) {
-    const chunks = chunkCaption(interimText, SETTINGS.maxCharsPerLine);
-    if (!chunks.length) return '';
-    const candidate = chunks[chunks.length - 1];
-    if (!shouldShowPreview(candidate)) return '';
-    state.lastPreviewRenderedAt = Date.now();
-    return candidate;
+  function updateInterim(text) {
+    const normalized = normalizeText(text);
+    if (!shouldShowInterim(normalized)) return;
+    if (normalized === state.lastInterimText) return;
+
+    const cues = buildCueObjects(normalized, 'interim');
+    if (!cues.length) return;
+
+    state.interimCue = cues[cues.length - 1];
+    state.lastInterimText = normalized;
+    state.lastInterimRenderedAt = Date.now();
+    render();
   }
 
   const socket = io({
@@ -417,21 +521,13 @@
   socket.on('caption_update', (data) => {
     const text = normalizeText(data.text || '');
     if (!text) return;
-
-    state.lastEventAt = Date.now();
-    const preview = makePreview(text);
-    if (preview && preview !== state.lastPreviewText) {
-      state.lastPreviewText = preview;
-      render();
-    }
+    updateInterim(text);
   });
 
   socket.on('caption_commit', (data) => {
     const text = normalizeText(data.text || '');
     if (!text) return;
-
-    state.lastEventAt = Date.now();
-    appendCommittedText(text);
+    addCommittedText(text);
   });
 
   render();
